@@ -17,7 +17,7 @@ function sincronizar_api() {
       CURLOPT_CUSTOMREQUEST => 'GET',
       CURLOPT_HTTPHEADER => array(
         'Content-Type: application/json',
-        'Authorization: Bearer YTMyMTRjOTAtNmVhOC00NTA2LWEwYmMtODQ3OWI4ZmFkYTE5OmRhNGE0NWQwNDMxMTQ5YTM5ZDcxMGE4NzgyNzczZTIy'
+        'Authorization: Bearer '.get_option('wbuy-import-token')
       ),
     ));
     
@@ -99,7 +99,7 @@ function sincronizar_api() {
       CURLOPT_CUSTOMREQUEST => 'GET',
       CURLOPT_HTTPHEADER => array(
         'Content-Type: application/json',
-        'Authorization: Bearer YTMyMTRjOTAtNmVhOC00NTA2LWEwYmMtODQ3OWI4ZmFkYTE5OmRhNGE0NWQwNDMxMTQ5YTM5ZDcxMGE4NzgyNzczZTIy'
+        'Authorization: Bearer '.get_option('wbuy-import-token')
       ),
     ));
     
