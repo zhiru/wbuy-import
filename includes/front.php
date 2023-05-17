@@ -88,7 +88,7 @@ function criar_secoes_campos() {
 
 //Função que vai exibir a descrição da seção na tela de opções do plugin (opcional)
 function exibir_descricao_secao() {
-  echo '<p>Nesta seção você pode configurar as opções do seu plugin.</p>';
+  // echo '<p>Nesta seção você pode configurar as opções do seu plugin.</p>';
 }
 
 //Função que vai exibir o campo na tela de opções do plugin (opcional)
