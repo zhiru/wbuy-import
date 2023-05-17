@@ -2,6 +2,8 @@
 
 //Função para sincronizar categorias e produtos com a API externa
 function sincronizar_api() {
+    $token = get_option('wbuy-import-token');
+    
     //Iniciar o cURL
     $curl = curl_init();
     
@@ -17,7 +19,7 @@ function sincronizar_api() {
       CURLOPT_CUSTOMREQUEST => 'GET',
       CURLOPT_HTTPHEADER => array(
         'Content-Type: application/json',
-        'Authorization: Bearer '.get_option('wbuy-import-token')
+        'Authorization: Bearer ' . $token
       ),
     ));
     
@@ -35,54 +37,68 @@ function sincronizar_api() {
     foreach ($obj->data as $categoria) {
       //Extrair o nome e o id da categoria
       $nome = $categoria->nome;
-      $id = $categoria->id;
+      $id = $categoria->url;
+      
+      $wpinset = term_exists($id, 'product_cat');
     
-      //Adicionar a categoria no WooCommerce
-      wp_insert_term(
-        $nome, //nome da categoria
-        'product_cat', //taxonomia do WooCommerce
-        array(
-          'description' => '', //descrição da categoria (opcional)
-          'slug' => $id //slug da categoria (opcional)
-        )
-      );
-    
+      //Verificar se a categoria já existe no WooCommerce pelo slug
+      if (!$wpinset) {
+        //Se não existe, adicionar a categoria no WooCommerce
+        $wpinset = wp_insert_term(
+          $nome, //nome da categoria
+          'product_cat', //taxonomia do WooCommerce
+          array(
+            'description' => '', //descrição da categoria (opcional)
+            'slug' => $id //slug da categoria (opcional)
+          )
+        );
+      }
+      
       //Percorrer os dados dentro do array subs
       foreach ($categoria->subs as $subcategoria) {
         //Extrair o nome e o id da subcategoria
         $subnome = $subcategoria->nome;
-        $subid = $subcategoria->id;
+        $subid = $subcategoria->url;
+        
+        $wpinset_sub = term_exists($subid, 'product_cat', $wpinset['term_id']);
     
-        //Adicionar a subcategoria no WooCommerce
-        wp_insert_term(
-          $subnome, //nome da subcategoria
-          'product_cat', //taxonomia do WooCommerce
-          array(
-            'description' => '', //descrição da subcategoria (opcional)
-            'slug' => $subid, //slug da subcategoria (opcional)
-            'parent' => $id //id da categoria pai
-          )
-        );
+        //Verificar se a subcategoria já existe no WooCommerce pelo slug
+        if (!$wpinset_sub) {
+          //Se não existe, adicionar a subcategoria no WooCommerce
+          $wpinset_sub = wp_insert_term(
+            $subnome, //nome da subcategoria
+            'product_cat', //taxonomia do WooCommerce
+            array(
+              'description' => '', //descrição da subcategoria (opcional)
+              'slug' => $subid, //slug da subcategoria (opcional)
+              'parent' => $wpinset['term_id'] //id da categoria pai
+            )
+          );
+        }
     
         //Percorrer os dados dentro do array subs da subcategoria
         foreach ($subcategoria->subs as $subsubcategoria) {
           //Extrair o nome e o id da subsubcategoria
           $subsubnome = $subsubcategoria->nome;
-          $subsubid = $subsubcategoria->id;
+          $subsubid = $subsubcategoria->url;
     
-          //Adicionar a subsubcategoria no WooCommerce
-          wp_insert_term(
-            $subsubnome, //nome da subsubcategoria
-            'product_cat', //taxonomia do WooCommerce
-            array(
-              'description' => '', //descrição da subsubcategoria (opcional)
-              'slug' => $subsubid, //slug da subsubcategoria (opcional)
-              'parent' => $subid //id da subcategoria pai
-            )
-          );
+          //Verificar se a subsubcategoria já existe no WooCommerce pelo slug
+          if (!term_exists($subsubid, 'product_cat')) {
+            //Se não existe, adicionar a subsubcategoria no WooCommerce
+            wp_insert_term(
+              $subsubnome, //nome da subsubcategoria
+              'product_cat', //taxonomia do WooCommerce
+              array(
+                'description' => '', //descrição da subsubcategoria (opcional)
+                'slug' => $subsubid, //slug da subsubcategoria (opcional)
+                'parent' => $wpinset_sub['term_id'] //id da subcategoria pai
+              )
+            );
+          }
         }
       }
     }
+
     
     //Iniciar outro cURL para ler a URL dos produtos
     $curl = curl_init();
@@ -99,7 +115,7 @@ function sincronizar_api() {
       CURLOPT_CUSTOMREQUEST => 'GET',
       CURLOPT_HTTPHEADER => array(
         'Content-Type: application/json',
-        'Authorization: Bearer '.get_option('wbuy-import-token')
+        'Authorization: Bearer ' . $token
       ),
     ));
     
@@ -178,19 +194,24 @@ function sincronizar_api() {
         //Criar o novo produto e obter o seu ID
         $product_id = $product->save();
       }
-    
-      //Atribuir a categoria do produto de acordo com o seu nível
-      if ($produto->categoria_level3->id > 0) {
-        //Se tem categoria de nível 3, atribuir essa categoria
-        wp_set_object_terms($product_id, $produto->categoria_level3->id, 'product_cat');
-      } elseif ($produto->categoria_level2->id > 0) {
+      
+        $categories = [
+          $produto->categoria_level1->url
+        ];
+      
+      if (!empty($produto->categoria_level2->url)) {
         //Se tem categoria de nível 2, atribuir essa categoria
-        wp_set_object_terms($product_id, $produto->categoria_level2->id, 'product_cat');
-      } else {
-        //Se não tem categoria de nível 2 ou 3, atribuir a categoria de nível 1
-        wp_set_object_terms($product_id, $produto->categoria_level1->id, 'product_cat');
+        $categories = array_merge($categories, [$produto->categoria_level2->url]);
       }
     
+      //Atribuir a categoria do produto de acordo com o seu nível
+      if (!empty($produto->categoria_level3->url)) {
+        //Se tem categoria de nível 3, atribuir essa categoria
+        $categories = array_merge($categories, [$produto->categoria_level3->url]);
+      }
+      
+      wp_set_object_terms($product_id, $categories, 'product_cat');
+      
       //Adicionar as imagens do produto
       foreach ($produto->fotos as $foto) {
         if ($foto->video == "") {
@@ -204,6 +225,10 @@ function sincronizar_api() {
           add_post_meta($product_id, '_video_url', $foto->video);
         }
       }
+      
+      /*highlight_string("<?php\n\$produto =\n" . var_export($produto, true) . ";\n?>");
+      highlight_string("<?php\n\$product =\n" . var_export($product, true) . ";\n?>");
+      die;*/
     }
 }
 
